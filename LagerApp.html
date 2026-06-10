@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="theme-color" content="#0f172a"/>
+<title>LagerApp Pro</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:'Inter',system-ui,sans-serif;background:#0f172a;color:#f1f5f9;min-height:100vh;overflow-x:hidden}
+  input,select,button{font-family:inherit}
+  button{cursor:pointer}
+  ::-webkit-scrollbar{width:4px}
+  ::-webkit-scrollbar-track{background:#0f172a}
+  ::-webkit-scrollbar-thumb{background:#334155;border-radius:4px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+
+<script type="text/babel">
+const {useState,useEffect,useCallback,useRef} = React;
+
+// ── STORAGE (localStorage für echte Geräteübergreifende Nutzung via Firebase würde man hier einbauen)
+// Für lokales Gerät: localStorage; für Multi-Gerät: Daten werden per Export/Import geteilt
+const LS = {
+  get:(k,fb)=>{ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):fb; }catch{return fb;} },
+  set:(k,v)=>{ try{ localStorage.setItem(k,JSON.stringify(v)); }catch{} }
+};
+
+// ── USERS
+const USERS = [
+  {id:1,name:"Admin", username:"admin",password:"admin123",role:"admin"},
+  {id:2,name:"Lana",  username:"lana", password:"lana123", role:"user"},
+  {id:3,name:"Uwe",   username:"uwe",  password:"uwe69",   role:"user"},
+];
+
+// ── REGALE EG + OG
+const SHELVES_EG = [
+  {id:"EG-A1",label:"Regal A1",floor:"EG",x:5, y:8, w:12,h:6, color:"#2563eb"},
+  {id:"EG-A2",label:"Regal A2",floor:"EG",x:5, y:18,w:12,h:6, color:"#2563eb"},
+  {id:"EG-B1",label:"Regal B1",floor:"EG",x:25,y:8, w:12,h:6, color:"#7c3aed"},
+  {id:"EG-B2",label:"Regal B2",floor:"EG",x:25,y:18,w:12,h:6, color:"#7c3aed"},
+  {id:"EG-C1",label:"Regal C1",floor:"EG",x:45,y:8, w:12,h:6, color:"#059669"},
+  {id:"EG-C2",label:"Regal C2",floor:"EG",x:45,y:18,w:12,h:6, color:"#059669"},
+  {id:"EG-D1",label:"Werkzeug D1",floor:"EG",x:65,y:8,w:12,h:16,color:"#d97706"},
+  {id:"EG-EIN",label:"Eingang EG",floor:"EG",x:38,y:30,w:8,h:4,color:"#6b7280",isSpecial:true},
+];
+const SHELVES_OG = [
+  {id:"OG-A1",label:"Regal A1",floor:"OG",x:5, y:8, w:12,h:6, color:"#0891b2"},
+  {id:"OG-A2",label:"Regal A2",floor:"OG",x:5, y:18,w:12,h:6, color:"#0891b2"},
+  {id:"OG-B1",label:"Regal B1",floor:"OG",x:25,y:8, w:12,h:6, color:"#be185d"},
+  {id:"OG-B2",label:"Regal B2",floor:"OG",x:25,y:18,w:12,h:6, color:"#be185d"},
+  {id:"OG-C1",label:"Regal C1",floor:"OG",x:45,y:8, w:12,h:6, color:"#0f766e"},
+  {id:"OG-C2",label:"Regal C2",floor:"OG",x:45,y:18,w:12,h:6, color:"#0f766e"},
+  {id:"OG-D1",label:"Archiv D1",floor:"OG",x:65,y:8,w:12,h:16,color:"#9333ea"},
+  {id:"OG-EIN",label:"Treppenhaus",floor:"OG",x:38,y:30,w:8,h:4,color:"#6b7280",isSpecial:true},
+];
+const ALL_SHELVES=[...SHELVES_EG,...SHELVES_OG];
+
+const INIT_PRODUCTS=[
+  {id:1, name:"Bohrmaschine Bosch",    shelfId:"EG-D1",qty:2, unit:"Stk",checkedOut:false,checkedOutBy:null,checkedOutAt:null},
+  {id:2, name:"Schraubenzieher-Set",   shelfId:"EG-D1",qty:5, unit:"Set",checkedOut:false,checkedOutBy:null,checkedOutAt:null},
+  {id:3, name:"Hydrauliköl 5L",        shelfId:"EG-A1",qty:10,unit:"Kan",checkedOut:false,checkedOutBy:null,checkedOutAt:null},
+  {id:4, name:"Bremsflüssigkeit DOT4", shelfId:"EG-A1",qty:8, unit:"Fl", checkedOut:false,checkedOutBy:null,checkedOutAt:null},
+  {id:5, name:"Motoröl 5W-40",         shelfId:"EG-A2",qty:15,unit:"Fl", checkedOut:false,checkedOutBy:null,checkedOutAt:null},
+  {id:6, name:"Luftfilter Universal",  shelfId:"EG-B1",qty:6, unit:"Stk",checkedOut:false,checkedOutBy:null,checkedOutAt:null},
+  {id:7, name:"Ölfilter Sortiment",    shelfId:"EG-B1",qty:4, unit:"Set",checkedOut:false,checkedOutBy:null,checkedOutAt:null},
+  {id:8, name:"Zündkerzen NGK",        shelfId:"EG-B2",qty:20,unit:"Stk",checkedOut:false,checkedOutBy:null,checkedOutAt:null},
+  {id:9, name:"Schmierfett Kartusche", shelfId:"EG-C1",qty:3, unit:"Stk",checkedOut:false,checkedOutBy:null,checkedOutAt:null},
+  {id:10,name:"Kühlerfrostschutz",     shelfId:"EG-C2",qty:7, unit:"Fl", checkedOut:false,checkedOutBy:null,checkedOutAt:null},
+  {id:11,name:"Ersatzlampen-Set",      shelfId:"OG-A1",qty:5, unit:"Set",checkedOut:false,checkedOutBy:null,checkedOutAt:null},
+  {id:12,name:"Sicherungen Sortiment", shelfId:"OG-A2",qty:3, unit:"Box",checkedOut:false,checkedOutBy:null,checkedOutAt:null},
+  {id:13,name:"Kabelbinder 100er",     shelfId:"OG-B1",qty:10,unit:"Pkg",checkedOut:false,checkedOutBy:null,checkedOutAt:null},
+  {id:14,name:"Dichtmasse Tube",       shelfId:"OG-C1",qty:6, unit:"Stk",checkedOut:false,checkedOutBy:null,checkedOutAt:null},
+];
+
+const INIT_VEHICLES=[
+  {id:1,plate:"M-AB 1234",brand:"Ford",    model:"Transit",year:2021,km:84500, status:"Verfügbar", ps:170,drive:"RWD",towBar:true, nextService:"2025-09-01",lastService:"2024-09-01",damages:[],notes:"TÜV 03/2026",photo:null},
+  {id:2,plate:"M-CD 5678",brand:"VW",      model:"Crafter",year:2020,km:102300,status:"Im Einsatz",ps:140,drive:"FWD",towBar:false,nextService:"2025-07-15",lastService:"2024-07-15",damages:["Delle hinten links"],notes:"Neue Reifen fällig",photo:null},
+  {id:3,plate:"M-EF 9012",brand:"Mercedes",model:"Sprinter",year:2022,km:51200, status:"Verfügbar", ps:190,drive:"AWD",towBar:true, nextService:"2025-12-01",lastService:"2024-12-01",damages:[],notes:"",photo:null},
+];
+
+// ── localStorage hooks
+function useLSState(key,fallback){
+  const [data,setData]=useState(()=>LS.get(key,fallback));
+  const save=useCallback(v=>{setData(v);LS.set(key,v);},[key]);
+  return [data,save];
+}
+
+// ── ICONS
+const SVG={
+  car:`<path d="M5 17H3a2 2 0 01-2-2V9a2 2 0 012-2h1l3-4h8l3 4h1a2 2 0 012 2v6a2 2 0 01-2 2h-2"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="16.5" cy="17.5" r="2.5"/>`,
+  map:`<polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/>`,
+  book:`<path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>`,
+  search:`<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>`,
+  logout:`<path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>`,
+  plus:`<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>`,
+  x:`<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>`,
+  box:`<path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>`,
+  edit:`<path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>`,
+  trash:`<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/>`,
+  ret:`<polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 00-4-4H4"/>`,
+  layers:`<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>`,
+  camera:`<path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/>`,
+  warn:`<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>`,
+  share:`<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>`,
+  download:`<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>`,
+  upload:`<polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/>`,
+};
+const I=({n,s=18,c="currentColor"})=>(
+  <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{__html:SVG[n]}}/>
+);
+
+const inp={width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #334155",background:"#0f172a",color:"#f1f5f9",fontSize:14,boxSizing:"border-box",outline:"none"};
+
+// ── LOGIN
+function Login({onLogin}){
+  const [u,setU]=useState("");const [p,setP]=useState("");const [err,setErr]=useState("");
+  const go=()=>{const f=USERS.find(x=>x.username===u&&x.password===p);f?(onLogin(f),setErr("")):setErr("Benutzername oder Passwort falsch.");};
+  return(
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0f172a,#1e3a5f,#0f2027)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{background:"rgba(255,255,255,0.05)",backdropFilter:"blur(12px)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:20,padding:"44px 36px",width:"100%",maxWidth:380,boxShadow:"0 25px 50px rgba(0,0,0,0.5)"}}>
+        <div style={{textAlign:"center",marginBottom:32}}>
+          <div style={{width:60,height:60,background:"linear-gradient(135deg,#3b82f6,#1d4ed8)",borderRadius:18,margin:"0 auto 14px",display:"flex",alignItems:"center",justifyContent:"center"}}><I n="box" s={28} c="#fff"/></div>
+          <h1 style={{color:"#fff",fontSize:26,fontWeight:800,letterSpacing:-0.5}}>LagerApp Pro</h1>
+          <p style={{color:"#94a3b8",fontSize:14,marginTop:4}}>Betriebsverwaltung</p>
+        </div>
+        {[["BENUTZERNAME","text",u,setU,"z.B. admin"],["PASSWORT","password",p,setP,"••••••••"]].map(([lb,tp,vl,fn,ph])=>(
+          <div key={lb} style={{marginBottom:14}}>
+            <label style={{color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:1,display:"block",marginBottom:5}}>{lb}</label>
+            <input type={tp} value={vl} onChange={e=>fn(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} placeholder={ph}
+              style={{...inp,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)",color:"#fff",fontSize:15}}/>
+          </div>
+        ))}
+        {err&&<p style={{color:"#f87171",fontSize:13,marginBottom:10,textAlign:"center"}}>{err}</p>}
+        <button onClick={go} style={{width:"100%",padding:13,borderRadius:10,border:"none",background:"linear-gradient(135deg,#3b82f6,#1d4ed8)",color:"#fff",fontSize:16,fontWeight:700,marginTop:6}}>
+          Anmelden
+        </button>
+        <div style={{marginTop:20,padding:14,background:"rgba(255,255,255,0.03)",borderRadius:10,border:"1px solid rgba(255,255,255,0.05)"}}>
+          <p style={{color:"#64748b",fontSize:11,fontWeight:700,letterSpacing:1,marginBottom:6}}>ZUGÄNGE</p>
+          {USERS.map(x=><p key={x.id} style={{color:"#475569",fontSize:12,margin:"2px 0"}}>{x.username} / {x.password}</p>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── SHELF MODAL
+function ShelfModal({shelf,products,user,onClose,onCheckout,onReturn,onAdd,onDel}){
+  const [nm,setNm]=useState("");const [qty,setQty]=useState(1);const [unit,setUnit]=useState("Stk");
+  const sp=products.filter(p=>p.shelfId===shelf.id);
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div style={{background:"#1e293b",borderRadius:20,width:"100%",maxWidth:520,maxHeight:"85vh",overflow:"auto",border:"1px solid #334155"}} onClick={e=>e.stopPropagation()}>
+        <div style={{padding:"20px 20px 14px",borderBottom:"1px solid #334155",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,background:"#1e293b",zIndex:1}}>
+          <div>
+            <h2 style={{color:"#f1f5f9",margin:0,fontSize:18,fontWeight:700}}>{shelf.label}</h2>
+            <p style={{color:"#64748b",margin:"3px 0 0",fontSize:12}}>{shelf.floor==="OG"?"Obergeschoss":"Erdgeschoss"} · {sp.length} Artikel</p>
+          </div>
+          <button onClick={onClose} style={{background:"#334155",border:"none",borderRadius:8,padding:8,color:"#94a3b8"}}><I n="x" s={16}/></button>
+        </div>
+        <div style={{padding:"14px 20px"}}>
+          {sp.length===0&&<p style={{color:"#475569",textAlign:"center",padding:20}}>Regal ist leer</p>}
+          {sp.map(p=>(
+            <div key={p.id} style={{padding:"12px 0",borderBottom:"1px solid #1e3a5f",display:"flex",alignItems:"center",gap:10}}>
+              <div style={{flex:1}}>
+                <p style={{color:p.checkedOut?"#f87171":"#f1f5f9",margin:0,fontWeight:600,fontSize:14}}>{p.name}</p>
+                <p style={{color:"#64748b",margin:"3px 0 0",fontSize:12}}>{p.qty} {p.unit} · {p.checkedOut?`⚠ ${p.checkedOutBy}`:"✓ Verfügbar"}</p>
+              </div>
+              <div style={{display:"flex",gap:6,flexShrink:0}}>
+                {!p.checkedOut
+                  ?<button onClick={()=>onCheckout(p.id)} style={{padding:"7px 11px",borderRadius:7,border:"none",background:"#ef4444",color:"#fff",fontSize:12,fontWeight:700}}>Entnehmen</button>
+                  :(p.checkedOutBy===user.name||user.role==="admin")
+                    ?<button onClick={()=>onReturn(p.id)} style={{padding:"7px 11px",borderRadius:7,border:"none",background:"#10b981",color:"#fff",fontSize:12,fontWeight:700}}>Zurück</button>
+                    :<span style={{padding:"7px 10px",borderRadius:7,background:"#292524",color:"#78716c",fontSize:12}}>Vergeben</span>
+                }
+                {user.role==="admin"&&<button onClick={()=>onDel(p.id)} style={{padding:7,borderRadius:7,border:"none",background:"#334155",color:"#94a3b8"}}><I n="trash" s={13}/></button>}
+              </div>
+            </div>
+          ))}
+          {user.role==="admin"&&(
+            <div style={{marginTop:16,padding:14,background:"#0f172a",borderRadius:12}}>
+              <p style={{color:"#94a3b8",fontSize:12,fontWeight:700,marginBottom:10}}>Artikel hinzufügen</p>
+              <input value={nm} onChange={e=>setNm(e.target.value)} placeholder="Artikelname" style={{...inp,marginBottom:8}}/>
+              <div style={{display:"flex",gap:8,marginBottom:10}}>
+                <input type="number" value={qty} onChange={e=>setQty(+e.target.value)} style={{...inp,flex:1}} min={1}/>
+                <select value={unit} onChange={e=>setUnit(e.target.value)} style={{...inp,flex:1}}>
+                  {["Stk","Set","Fl","Kan","Pkg","m","kg","L","Box"].map(u=><option key={u}>{u}</option>)}
+                </select>
+              </div>
+              <button onClick={()=>{if(nm.trim()){onAdd({name:nm.trim(),qty,unit,shelfId:shelf.id});setNm("");setQty(1);}}} style={{width:"100%",padding:10,borderRadius:8,border:"none",background:"#3b82f6",color:"#fff",fontSize:14,fontWeight:700}}>Hinzufügen</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── FLOOR MAP SVG
+function FloorMap({shelves,products,hi,onSelect}){
+  return(
+    <svg viewBox="0 0 85 38" style={{width:"100%",minWidth:300,display:"block"}}>
+      <rect x="0" y="0" width="85" height="38" fill="#0f172a" rx="2"/>
+      <rect x="1" y="1" width="83" height="36" fill="none" stroke="#1e293b" strokeWidth="0.5" rx="1.5"/>
+      {[10,20,30,40,50,60,70,80].map(x=><line key={x} x1={x} y1="1" x2={x} y2="37" stroke="#1e293b" strokeWidth="0.2"/>)}
+      {[8,16,24,32].map(y=><line key={y} x1="1" y1={y} x2="84" y2={y} stroke="#1e293b" strokeWidth="0.2"/>)}
+      {shelves.map(s=>{
+        const cnt=products.filter(p=>p.shelfId===s.id).length;
+        const co=products.filter(p=>p.shelfId===s.id&&p.checkedOut).length;
+        const isHi=hi===s.id;
+        const fill=s.isSpecial?"#1e293b":isHi?"#fbbf2433":s.color+"33";
+        const stroke=s.isSpecial?"#334155":isHi?"#f59e0b":s.color;
+        return(
+          <g key={s.id} onClick={()=>!s.isSpecial&&onSelect(s.id)} style={{cursor:s.isSpecial?"default":"pointer"}}>
+            <rect x={s.x} y={s.y} width={s.w} height={s.h} fill={fill} stroke={stroke} strokeWidth={isHi?0.7:0.4} rx="0.8"/>
+            <text x={s.x+s.w/2} y={s.y+s.h/2-0.8} textAnchor="middle" fill={s.isSpecial?"#475569":isHi?"#92400e":"#e2e8f0"} fontSize="1.8" fontWeight="bold">{s.id.replace(/^(EG|OG)-/,"")}</text>
+            {!s.isSpecial&&<text x={s.x+s.w/2} y={s.y+s.h/2+1.8} textAnchor="middle" fill={isHi?"#92400e":"#64748b"} fontSize="1.2">{cnt} Artikel{co>0?` · ${co}✗`:""}</text>}
+            {s.isSpecial&&<text x={s.x+s.w/2} y={s.y+s.h/2+0.8} textAnchor="middle" fill="#475569" fontSize="1.3">{s.label}</text>}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// ── LAGEPLAN TAB
+function LagerplanTab({products,user,onCheckout,onReturn,onAdd,onDel}){
+  const [floor,setFloor]=useState("EG");
+  const [sel,setSel]=useState(null);
+  const [srch,setSrch]=useState("");const [res,setRes]=useState(null);const [hi,setHi]=useState(null);
+  const shelves=floor==="EG"?SHELVES_EG:SHELVES_OG;
+  const selShelf=ALL_SHELVES.find(s=>s.id===sel);
+
+  const doSearch=()=>{
+    if(!srch.trim()){setRes(null);setHi(null);return;}
+    const found=products.find(p=>p.name.toLowerCase().includes(srch.toLowerCase()));
+    if(found){
+      const s=ALL_SHELVES.find(x=>x.id===found.shelfId);
+      setRes({product:found,shelf:s});setHi(found.shelfId);
+      if(s)setFloor(s.floor);
+    }else{setRes({nf:true});setHi(null);}
+  };
+
+  return(
+    <div style={{padding:16}}>
+      <div style={{display:"flex",gap:8,marginBottom:14}}>
+        <div style={{flex:1,position:"relative"}}>
+          <div style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"#64748b",pointerEvents:"none"}}><I n="search" s={15}/></div>
+          <input value={srch} onChange={e=>setSrch(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doSearch()} placeholder="Produkt suchen…" style={{...inp,paddingLeft:32}}/>
+        </div>
+        <button onClick={doSearch} style={{padding:"10px 14px",borderRadius:8,border:"none",background:"#3b82f6",color:"#fff",fontWeight:700,fontSize:13}}>Suchen</button>
+        {hi&&<button onClick={()=>{setHi(null);setRes(null);setSrch("");}} style={{padding:10,borderRadius:8,border:"none",background:"#334155",color:"#94a3b8"}}><I n="x" s={15}/></button>}
+      </div>
+
+      {res&&(
+        <div style={{padding:"11px 13px",borderRadius:10,background:res.nf?"#450a0a":"#052e16",border:`1px solid ${res.nf?"#7f1d1d":"#14532d"}`,marginBottom:12}}>
+          {res.nf
+            ?<p style={{color:"#fca5a5",margin:0}}>Kein Artikel gefunden.</p>
+            :<div>
+              <p style={{color:"#86efac",margin:0,fontWeight:700}}>{res.product.name}</p>
+              <p style={{color:"#4ade80",margin:"3px 0 0",fontSize:13}}>→ {res.shelf?.label} ({res.shelf?.floor}) · {res.product.qty} {res.product.unit} · {res.product.checkedOut?`⚠ Entnommen von ${res.product.checkedOutBy}`:"✓ Verfügbar"}</p>
+            </div>
+          }
+        </div>
+      )}
+
+      <div style={{display:"flex",gap:8,marginBottom:12}}>
+        {["EG","OG"].map(f=>(
+          <button key={f} onClick={()=>setFloor(f)} style={{flex:1,padding:"9px 0",borderRadius:9,border:`1px solid ${floor===f?"#3b82f6":"#334155"}`,background:floor===f?"#1e3a5f":"#1e293b",color:floor===f?"#60a5fa":"#64748b",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+            <I n="layers" s={13}/>{f==="EG"?"Erdgeschoss":"Obergeschoss"}
+          </button>
+        ))}
+      </div>
+
+      <div style={{background:"#0f172a",borderRadius:13,border:"1px solid #1e3a5f",padding:10,overflow:"auto"}}>
+        <p style={{color:"#475569",fontSize:10,margin:"0 0 7px",fontWeight:700,letterSpacing:1}}>LAGEPLAN {floor} — Regal anklicken</p>
+        <FloorMap shelves={shelves} products={products} hi={hi} onSelect={setSel}/>
+      </div>
+
+      <div style={{display:"flex",gap:12,marginTop:8}}>
+        {[["Verfügbar","#3b82f6"],["Entnommen","#ef4444"],["Markiert","#f59e0b"]].map(([l,c])=>(
+          <div key={l} style={{display:"flex",alignItems:"center",gap:5}}>
+            <div style={{width:8,height:8,background:c,borderRadius:2}}/>
+            <span style={{color:"#64748b",fontSize:11}}>{l}</span>
+          </div>
+        ))}
+      </div>
+
+      {sel&&selShelf&&!selShelf.isSpecial&&(
+        <ShelfModal shelf={selShelf} products={products} user={user} onClose={()=>setSel(null)}
+          onCheckout={id=>{onCheckout(id);}} onReturn={id=>{onReturn(id);}} onAdd={onAdd} onDel={onDel}/>
+      )}
+    </div>
+  );
+}
+
+// ── KFZ FORM
+const EV={plate:"",brand:"",model:"",year:new Date().getFullYear(),km:0,ps:"",drive:"FWD",towBar:false,status:"Verfügbar",nextService:"",lastService:"",damages:[],notes:"",photo:null};
+const SC={"Verfügbar":"#10b981","Im Einsatz":"#f59e0b","In Wartung":"#ef4444","Außer Dienst":"#6b7280"};
+
+function KfzForm({initial,onSave,onCancel}){
+  const [f,setF]=useState({...EV,...initial});
+  const [dmg,setDmg]=useState("");
+  const fRef=useRef();
+  const s=(k,v)=>setF(p=>({...p,[k]:v}));
+  const addD=()=>{if(dmg.trim()){s("damages",[...f.damages,dmg.trim()]);setDmg("");}};
+  const delD=(i)=>s("damages",f.damages.filter((_,j)=>j!==i));
+  const handlePhoto=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>s("photo",ev.target.result);r.readAsDataURL(file);};
+
+  return(
+    <div style={{background:"#1e293b",borderRadius:16,padding:18,marginBottom:14,border:"1px solid #334155"}}>
+      <h3 style={{color:"#f1f5f9",margin:"0 0 14px",fontSize:16,fontWeight:700}}>{initial.plate?"Bearbeiten":"Neues Fahrzeug"}</h3>
+
+      <div style={{marginBottom:14,textAlign:"center"}}>
+        {f.photo
+          ?<div style={{position:"relative",display:"inline-block",width:"100%"}}>
+            <img src={f.photo} alt="Fzg" style={{width:"100%",maxHeight:180,objectFit:"cover",borderRadius:10,border:"2px solid #334155"}}/>
+            <button onClick={()=>s("photo",null)} style={{position:"absolute",top:6,right:6,padding:5,borderRadius:6,border:"none",background:"rgba(0,0,0,0.7)",color:"#fff"}}><I n="x" s={12}/></button>
+          </div>
+          :<button onClick={()=>fRef.current.click()} style={{width:"100%",padding:"22px 0",borderRadius:10,border:"2px dashed #334155",background:"transparent",color:"#475569",display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
+            <I n="camera" s={22}/><span style={{fontSize:13}}>Foto hinzufügen</span>
+          </button>
+        }
+        <input type="file" accept="image/*" ref={fRef} onChange={handlePhoto} style={{display:"none"}}/>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9,marginBottom:10}}>
+        {[["Kennzeichen","plate","text"],["Marke","brand","text"],["Modell","model","text"],["Baujahr","year","number"],["KM-Stand","km","number"],["PS Leistung","ps","number"]].map(([l,k,t])=>(
+          <div key={k}>
+            <label style={{color:"#94a3b8",fontSize:11,fontWeight:700,display:"block",marginBottom:3}}>{l}</label>
+            <input type={t} value={f[k]} onChange={e=>s(k,t==="number"?+e.target.value:e.target.value)} style={inp}/>
+          </div>
+        ))}
+        <div>
+          <label style={{color:"#94a3b8",fontSize:11,fontWeight:700,display:"block",marginBottom:3}}>Antrieb</label>
+          <select value={f.drive} onChange={e=>s("drive",e.target.value)} style={inp}>
+            {[["FWD","FWD (Vorderrad)"],["RWD","RWD (Hinterrad)"],["AWD","AWD (Allrad)"],["4WD","4WD (Zuschaltbar)"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={{color:"#94a3b8",fontSize:11,fontWeight:700,display:"block",marginBottom:3}}>Status</label>
+          <select value={f.status} onChange={e=>s("status",e.target.value)} style={inp}>
+            {Object.keys(SC).map(x=><option key={x}>{x}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={{color:"#94a3b8",fontSize:11,fontWeight:700,display:"block",marginBottom:3}}>Nächste Wartung</label>
+          <input type="date" value={f.nextService} onChange={e=>s("nextService",e.target.value)} style={inp}/>
+        </div>
+        <div>
+          <label style={{color:"#94a3b8",fontSize:11,fontWeight:700,display:"block",marginBottom:3}}>Letzte Wartung</label>
+          <input type="date" value={f.lastService} onChange={e=>s("lastService",e.target.value)} style={inp}/>
+        </div>
+      </div>
+
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,padding:"9px 11px",background:"#0f172a",borderRadius:8}}>
+        <input type="checkbox" id="ahk" checked={f.towBar} onChange={e=>s("towBar",e.target.checked)} style={{width:16,height:16}}/>
+        <label htmlFor="ahk" style={{color:"#e2e8f0",fontSize:14}}>Anhängerkupplung (AHK) vorhanden</label>
+      </div>
+
+      <div style={{marginBottom:12}}>
+        <label style={{color:"#94a3b8",fontSize:11,fontWeight:700,display:"block",marginBottom:8}}>SCHÄDEN</label>
+        {f.damages.map((d,i)=>(
+          <div key={i} style={{display:"flex",alignItems:"center",gap:7,marginBottom:5}}>
+            <div style={{flex:1,padding:"7px 10px",background:"#0f172a",borderRadius:7,display:"flex",alignItems:"center",gap:5}}>
+              <I n="warn" s={12} c="#f59e0b"/><span style={{color:"#fca5a5",fontSize:13}}>{d}</span>
+            </div>
+            <button onClick={()=>delD(i)} style={{padding:6,borderRadius:6,border:"none",background:"#334155",color:"#94a3b8"}}><I n="x" s={12}/></button>
+          </div>
+        ))}
+        <div style={{display:"flex",gap:7}}>
+          <input value={dmg} onChange={e=>setDmg(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addD()} placeholder="Schaden beschreiben…" style={{...inp,flex:1}}/>
+          <button onClick={addD} style={{padding:"10px 12px",borderRadius:8,border:"none",background:"#334155",color:"#f59e0b",fontWeight:700,whiteSpace:"nowrap"}}>+ Hinzu</button>
+        </div>
+      </div>
+
+      <div style={{marginBottom:14}}>
+        <label style={{color:"#94a3b8",fontSize:11,fontWeight:700,display:"block",marginBottom:4}}>NOTIZEN</label>
+        <input value={f.notes} onChange={e=>s("notes",e.target.value)} style={inp}/>
+      </div>
+
+      <div style={{display:"flex",gap:9}}>
+        <button onClick={()=>onSave(f)} style={{flex:1,padding:11,borderRadius:8,border:"none",background:"#3b82f6",color:"#fff",fontWeight:700,fontSize:15}}>Speichern</button>
+        <button onClick={onCancel} style={{padding:11,borderRadius:8,border:"none",background:"#334155",color:"#94a3b8",fontSize:14}}>Abbrechen</button>
+      </div>
+    </div>
+  );
+}
+
+// ── KFZ TAB
+function KfzTab({user}){
+  const [vehicles,setVehicles]=useLSState("kfz_v3",INIT_VEHICLES);
+  const [editing,setEditing]=useState(null);
+  const DL={"FWD":"Vorderrad","RWD":"Hinterrad","AWD":"Allrad","4WD":"4×4"};
+
+  const save=f=>{
+    if(editing==="new") setVehicles([...vehicles,{...f,id:Date.now()}]);
+    else setVehicles(vehicles.map(v=>v.id===editing?{...v,...f}:v));
+    setEditing(null);
+  };
+
+  return(
+    <div style={{padding:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div>
+          <h2 style={{color:"#f1f5f9",margin:0,fontSize:20,fontWeight:700}}>Fuhrpark</h2>
+          <p style={{color:"#64748b",margin:"3px 0 0",fontSize:13}}>{vehicles.length} Fahrzeuge</p>
+        </div>
+        {user.role==="admin"&&!editing&&(
+          <button onClick={()=>setEditing("new")} style={{padding:"9px 14px",borderRadius:9,border:"none",background:"#3b82f6",color:"#fff",fontWeight:700,display:"flex",alignItems:"center",gap:5,fontSize:13}}>
+            <I n="plus" s={14}/> Fahrzeug
+          </button>
+        )}
+      </div>
+
+      {editing==="new"&&<KfzForm initial={EV} onSave={save} onCancel={()=>setEditing(null)}/>}
+
+      {vehicles.map(v=>(
+        <div key={v.id}>
+          {editing===v.id
+            ?<KfzForm initial={v} onSave={save} onCancel={()=>setEditing(null)}/>
+            :<div style={{background:"#1e293b",borderRadius:14,marginBottom:10,border:"1px solid #334155",overflow:"hidden"}}>
+              {v.photo&&<img src={v.photo} alt={v.plate} style={{width:"100%",maxHeight:170,objectFit:"cover",display:"block"}}/>}
+              <div style={{padding:"14px 15px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                  <div style={{flex:1}}>
+                    <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginBottom:5}}>
+                      <span style={{background:"#0f172a",padding:"4px 10px",borderRadius:6,color:"#f1f5f9",fontWeight:800,fontSize:14,letterSpacing:1}}>{v.plate}</span>
+                      <span style={{padding:"3px 8px",borderRadius:6,background:(SC[v.status]||"#6b7280")+"22",color:SC[v.status]||"#6b7280",fontSize:11,fontWeight:700}}>{v.status}</span>
+                      {v.towBar&&<span style={{padding:"3px 8px",borderRadius:6,background:"#0c4a6e22",color:"#38bdf8",fontSize:11,fontWeight:700}}>AHK ✓</span>}
+                    </div>
+                    <p style={{color:"#e2e8f0",margin:"0 0 5px",fontWeight:600,fontSize:14}}>{v.brand} {v.model} <span style={{color:"#64748b",fontWeight:400}}>({v.year})</span></p>
+                  </div>
+                  {user.role==="admin"&&(
+                    <div style={{display:"flex",gap:6,marginLeft:8}}>
+                      <button onClick={()=>setEditing(v.id)} style={{padding:7,borderRadius:7,border:"none",background:"#334155",color:"#94a3b8"}}><I n="edit" s={13}/></button>
+                      <button onClick={()=>setVehicles(vehicles.filter(x=>x.id!==v.id))} style={{padding:7,borderRadius:7,border:"none",background:"#334155",color:"#94a3b8"}}><I n="trash" s={13}/></button>
+                    </div>
+                  )}
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:5,marginBottom:8}}>
+                  {[["KM",`${(v.km||0).toLocaleString("de-DE")} km`],["PS",v.ps?`${v.ps} PS`:"—"],["Antrieb",DL[v.drive]||v.drive||"—"],["Wartung",v.nextService||"—"],["Letzte",v.lastService||"—"]].map(([l,val])=>(
+                    <div key={l} style={{background:"#0f172a",borderRadius:7,padding:"7px 9px"}}>
+                      <p style={{color:"#64748b",fontSize:10,fontWeight:700,margin:"0 0 2px"}}>{l}</p>
+                      <p style={{color:"#e2e8f0",fontSize:12,margin:0,fontWeight:600}}>{val}</p>
+                    </div>
+                  ))}
+                </div>
+                {v.damages&&v.damages.length>0&&v.damages.map((d,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:5,padding:"4px 8px",background:"#450a0a",borderRadius:5,marginBottom:3}}>
+                    <I n="warn" s={11} c="#f59e0b"/><span style={{color:"#fca5a5",fontSize:12}}>{d}</span>
+                  </div>
+                ))}
+                {v.notes&&<p style={{color:"#475569",margin:"6px 0 0",fontSize:12,fontStyle:"italic"}}>{v.notes}</p>}
+              </div>
+            </div>
+          }
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── BÜCHEREI TAB
+function BüchereiTab({log,user,onReturn}){
+  const active=log.filter(e=>e.type==="checkout"&&!e.returned).sort((a,b)=>new Date(b.at)-new Date(a.at));
+  const hist=[...log].sort((a,b)=>new Date(b.at)-new Date(a.at)).slice(0,60);
+  return(
+    <div style={{padding:16}}>
+      <h2 style={{color:"#f1f5f9",margin:"0 0 3px",fontSize:20,fontWeight:700}}>Entnahme-Bücherei</h2>
+      <p style={{color:"#64748b",margin:"0 0 16px",fontSize:13}}>{active.length} Artikel momentan entnommen</p>
+
+      {active.length>0&&(
+        <div style={{marginBottom:22}}>
+          <p style={{color:"#f59e0b",fontSize:11,fontWeight:700,letterSpacing:1,margin:"0 0 9px"}}>AKTUELL ENTNOMMEN</p>
+          {active.map(e=>(
+            <div key={e.id} style={{background:"#1e293b",borderRadius:11,padding:"12px 14px",marginBottom:7,border:"1px solid #451a03",display:"flex",alignItems:"center",gap:10}}>
+              <div style={{flex:1}}>
+                <p style={{color:"#f1f5f9",margin:0,fontWeight:600,fontSize:14}}>{e.productName}</p>
+                <p style={{color:"#64748b",margin:"3px 0 0",fontSize:12}}><span style={{color:"#f59e0b",fontWeight:700}}>{e.user}</span> · {new Date(e.at).toLocaleString("de-DE")}</p>
+              </div>
+              {(user.role==="admin"||e.user===user.name)&&(
+                <button onClick={()=>onReturn(e.productId)} style={{padding:"7px 11px",borderRadius:7,border:"none",background:"#10b981",color:"#fff",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
+                  <I n="ret" s={12}/> Zurück
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p style={{color:"#475569",fontSize:11,fontWeight:700,letterSpacing:1,margin:"0 0 9px"}}>VERLAUF</p>
+      {hist.length===0&&<p style={{color:"#334155",textAlign:"center",padding:20}}>Keine Einträge</p>}
+      {hist.map(e=>(
+        <div key={e.id} style={{padding:"9px 0",borderBottom:"1px solid #1e293b",display:"flex",alignItems:"center",gap:9}}>
+          <div style={{width:7,height:7,borderRadius:"50%",background:e.type==="return"?"#10b981":"#ef4444",flexShrink:0}}/>
+          <div style={{flex:1}}>
+            <p style={{color:"#94a3b8",margin:0,fontSize:13}}><span style={{fontWeight:700,color:"#e2e8f0"}}>{e.user}</span> · {e.type==="return"?"zurückgelegt":"entnommen"}: {e.productName}</p>
+            <p style={{color:"#475569",margin:"2px 0 0",fontSize:11}}>{new Date(e.at).toLocaleString("de-DE")}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── SYNC MODAL (Daten exportieren/importieren für Multi-Gerät)
+function SyncModal({products,log,onImport,onClose}){
+  const [tab,setTab]=useState("export");
+  const [imported,setImported]=useState("");
+  const [msg,setMsg]=useState("");
+
+  const exportData=JSON.stringify({products,log,_v:2,_t:new Date().toISOString()});
+
+  const doImport=()=>{
+    try{
+      const d=JSON.parse(imported);
+      if(d.products&&d.log){onImport(d.products,d.log);setMsg("✓ Daten erfolgreich importiert!");}
+      else setMsg("❌ Ungültiges Format.");
+    }catch{setMsg("❌ JSON-Fehler.");}
+  };
+
+  const copyExport=()=>{navigator.clipboard?.writeText(exportData).then(()=>setMsg("✓ Kopiert!")).catch(()=>setMsg("Manuell kopieren ↑"));};
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div style={{background:"#1e293b",borderRadius:20,width:"100%",maxWidth:480,maxHeight:"88vh",overflow:"auto",border:"1px solid #334155"}} onClick={e=>e.stopPropagation()}>
+        <div style={{padding:"20px 20px 14px",borderBottom:"1px solid #334155",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <h2 style={{color:"#f1f5f9",margin:0,fontSize:18,fontWeight:700}}>Daten synchronisieren</h2>
+          <button onClick={onClose} style={{background:"#334155",border:"none",borderRadius:8,padding:8,color:"#94a3b8"}}><I n="x" s={16}/></button>
+        </div>
+        <div style={{padding:"16px 20px"}}>
+          <div style={{display:"flex",gap:8,marginBottom:16}}>
+            {["export","import"].map(t=>(
+              <button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:9,borderRadius:8,border:`1px solid ${tab===t?"#3b82f6":"#334155"}`,background:tab===t?"#1e3a5f":"transparent",color:tab===t?"#60a5fa":"#64748b",fontWeight:700,fontSize:13}}>
+                {t==="export"?"📤 Exportieren":"📥 Importieren"}
+              </button>
+            ))}
+          </div>
+
+          {tab==="export"&&(
+            <div>
+              <p style={{color:"#94a3b8",fontSize:13,marginBottom:12}}>Kopiere diesen Text und schicke ihn per WhatsApp / E-Mail an ein anderes Gerät, dann dort importieren.</p>
+              <textarea readOnly value={exportData} style={{...inp,height:140,resize:"none",fontSize:11,fontFamily:"monospace",marginBottom:10}}/>
+              <button onClick={copyExport} style={{width:"100%",padding:11,borderRadius:8,border:"none",background:"#3b82f6",color:"#fff",fontWeight:700,fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+                <I n="share" s={15}/> In Zwischenablage kopieren
+              </button>
+            </div>
+          )}
+
+          {tab==="import"&&(
+            <div>
+              <p style={{color:"#94a3b8",fontSize:13,marginBottom:12}}>Füge hier den exportierten Text eines anderen Geräts ein:</p>
+              <textarea value={imported} onChange={e=>setImported(e.target.value)} placeholder='{"products":[...],"log":[...]}' style={{...inp,height:140,resize:"none",fontSize:11,fontFamily:"monospace",marginBottom:10}}/>
+              <button onClick={doImport} style={{width:"100%",padding:11,borderRadius:8,border:"none",background:"#10b981",color:"#fff",fontWeight:700,fontSize:14}}>Importieren</button>
+            </div>
+          )}
+
+          {msg&&<p style={{color:msg.startsWith("✓")?"#86efac":"#f87171",marginTop:12,textAlign:"center",fontWeight:700}}>{msg}</p>}
+
+          <div style={{marginTop:16,padding:14,background:"#0f172a",borderRadius:10}}>
+            <p style={{color:"#64748b",fontSize:11,fontWeight:700,letterSpacing:1,marginBottom:8}}>📱 ALS APP INSTALLIEREN (ANDROID)</p>
+            <p style={{color:"#475569",fontSize:12,lineHeight:1.7}}>
+              1. Diese Seite in <strong style={{color:"#94a3b8"}}>Chrome</strong> öffnen<br/>
+              2. Menü <strong style={{color:"#94a3b8"}}>⋮</strong> → <strong style={{color:"#94a3b8"}}>"Zum Startbildschirm hinzufügen"</strong><br/>
+              3. App erscheint wie eine native App
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── MAIN APP
+function App(){
+  const [user,setUser]=useState(()=>{try{const u=sessionStorage.getItem("lager_user");return u?JSON.parse(u):null;}catch{return null;}});
+  const [tab,setTab]=useState("lager");
+  const [showSync,setShowSync]=useState(false);
+  const [products,setProducts]=useLSState("lager_products_v3",INIT_PRODUCTS);
+  const [log,setLog]=useLSState("lager_log_v3",[]);
+
+  const login=u=>{setUser(u);try{sessionStorage.setItem("lager_user",JSON.stringify(u));}catch{}};
+  const logout=()=>{setUser(null);try{sessionStorage.removeItem("lager_user");}catch{}};
+
+  if(!user) return <Login onLogin={login}/>;
+
+  const checkout=id=>{
+    const p=products.find(x=>x.id===id);if(!p||p.checkedOut)return;
+    const now=new Date().toISOString();
+    setProducts(products.map(x=>x.id===id?{...x,checkedOut:true,checkedOutBy:user.name,checkedOutAt:now}:x));
+    setLog([...log,{id:Date.now(),productId:id,productName:p.name,user:user.name,at:now,type:"checkout",returned:false}]);
+  };
+  const returnP=id=>{
+    const p=products.find(x=>x.id===id);if(!p)return;
+    const now=new Date().toISOString();
+    setProducts(products.map(x=>x.id===id?{...x,checkedOut:false,checkedOutBy:null,checkedOutAt:null}:x));
+    setLog([...log.map(e=>e.productId===id&&!e.returned?{...e,returned:true}:e),{id:Date.now()+1,productId:id,productName:p.name,user:user.name,at:now,type:"return",returned:true}]);
+  };
+  const addProduct=d=>setProducts([...products,{id:Date.now(),...d,checkedOut:false,checkedOutBy:null,checkedOutAt:null}]);
+  const delProduct=id=>setProducts(products.filter(p=>p.id!==id));
+  const handleImport=(p,l)=>{setProducts(p);setLog(l);setShowSync(false);};
+
+  const tabs=[{id:"lager",label:"Lageplan",icon:"map"},{id:"kfz",label:"Kfz",icon:"car"},{id:"log",label:"Bücherei",icon:"book"}];
+  const coCnt=products.filter(p=>p.checkedOut).length;
+
+  return(
+    <div style={{minHeight:"100vh",background:"#0f172a",display:"flex",flexDirection:"column",maxWidth:700,margin:"0 auto"}}>
+      {/* Header */}
+      <div style={{background:"#1e293b",borderBottom:"1px solid #334155",padding:"11px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:50}}>
+        <div style={{display:"flex",alignItems:"center",gap:9}}>
+          <div style={{width:32,height:32,background:"linear-gradient(135deg,#3b82f6,#1d4ed8)",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center"}}><I n="box" s={16} c="#fff"/></div>
+          <span style={{color:"#f1f5f9",fontWeight:800,fontSize:16}}>LagerApp Pro</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:7}}>
+          <button onClick={()=>setShowSync(true)} style={{padding:"6px 10px",borderRadius:8,border:"none",background:"#334155",color:"#60a5fa",display:"flex",alignItems:"center",gap:4,fontSize:12,fontWeight:700}}>
+            <I n="share" s={13}/> Sync
+          </button>
+          <div style={{display:"flex",alignItems:"center",gap:5}}>
+            <div style={{width:7,height:7,borderRadius:"50%",background:user.role==="admin"?"#f59e0b":"#10b981"}}/>
+            <span style={{color:"#94a3b8",fontSize:12}}>{user.name}</span>
+          </div>
+          <button onClick={logout} style={{padding:"6px 8px",borderRadius:8,border:"none",background:"#334155",color:"#94a3b8"}}><I n="logout" s={13}/></button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{flex:1,overflowY:"auto",paddingBottom:64}}>
+        {tab==="lager"&&<LagerplanTab products={products} user={user} onCheckout={checkout} onReturn={returnP} onAdd={addProduct} onDel={delProduct}/>}
+        {tab==="kfz"&&<KfzTab user={user}/>}
+        {tab==="log"&&<BüchereiTab log={log} user={user} onReturn={returnP}/>}
+      </div>
+
+      {/* Bottom nav */}
+      <div style={{background:"#1e293b",borderTop:"1px solid #334155",display:"flex",position:"fixed",bottom:0,left:0,right:0,maxWidth:700,margin:"0 auto",zIndex:50}}>
+        {tabs.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"11px 8px",border:"none",background:"transparent",color:tab===t.id?"#3b82f6":"#475569",display:"flex",flexDirection:"column",alignItems:"center",gap:3,position:"relative"}}>
+            {t.id==="log"&&coCnt>0&&<span style={{position:"absolute",top:7,right:"calc(50% - 17px)",background:"#ef4444",color:"#fff",borderRadius:"50%",width:15,height:15,fontSize:9,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{coCnt}</span>}
+            <I n={t.icon} s={20}/>
+            <span style={{fontSize:10,fontWeight:700}}>{t.label}</span>
+            {tab===t.id&&<div style={{position:"absolute",bottom:0,left:"28%",right:"28%",height:2,background:"#3b82f6",borderRadius:2}}/>}
+          </button>
+        ))}
+      </div>
+
+      {showSync&&<SyncModal products={products} log={log} onImport={handleImport} onClose={()=>setShowSync(false)}/>}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
